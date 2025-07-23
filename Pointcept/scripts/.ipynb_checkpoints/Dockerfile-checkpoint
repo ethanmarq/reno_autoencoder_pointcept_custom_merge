@@ -1,0 +1,58 @@
+Bootstrap: docker
+From: pytorch/pytorch:2.0.1-cuda11.7-cudnn8-devel
+
+%post
+    # Fix nvidia-key error issue (NO_PUBKEY A4B469963BF863CC)
+    rm /etc/apt/sources.list.d/*.list
+
+    # Installing apt packages
+    export DEBIAN_FRONTEND=noninteractive && \
+    apt -y update --no-install-recommends && \
+    apt -y install --no-install-recommends \
+        git wget tmux vim zsh build-essential cmake ninja-build libopenblas-dev libsparsehash-dev && \
+    apt autoremove -y && \
+    apt clean -y && \
+    export DEBIAN_FRONTEND=dialog
+
+    # Install Pointcept environment
+    conda install h5py pyyaml -c anaconda -y
+    conda install sharedarray tensorboard tensorboardx yapf addict einops scipy plyfile termcolor timm -c conda-forge -y
+    conda install pytorch-cluster pytorch-scatter pytorch-sparse -c pyg -y
+
+    pip install --upgrade pip
+    pip install torch-geometric
+    pip install spconv-cu117
+    pip install open3d
+
+    # Build MinkowskiEngine
+    git clone https://github.com/NVIDIA/MinkowskiEngine.git
+    cd MinkowskiEngine
+    TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0+PTX 8.0" python setup.py install --blas=openblas --force_cuda
+    cd /
+
+    # Build pointops
+    git clone https://github.com/Pointcept/Pointcept.git
+    TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0+PTX 8.0" pip install Pointcept/libs/pointops -v
+
+    # Build pointgroup_ops
+    TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0+PTX 8.0" pip install Pointcept/libs/pointgroup_ops -v
+
+    # Build swin3d
+    TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX 8.0" pip install -U git+https://github.com/microsoft/Swin3D.git -v
+
+    pip install flash-attn==2.6.3
+
+%environment
+    # Set environment variables if needed
+    # export MY_VAR="my_value"
+
+%runscript
+    # Commands to run when the container is executed
+    # For example: python /path/to/your/script.py
+
+%labels
+    Maintainer "Your Name <your.email@example.com>"
+    Version "1.0"
+
+%help
+    This container provides the Pointcept environment with necessary dependencies.

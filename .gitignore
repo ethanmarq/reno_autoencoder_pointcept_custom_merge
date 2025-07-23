@@ -5,3 +5,5 @@ flash-attention/*
 torchsparse/*
 
 Pointcept/data/*
+
+.ipynb_checkpoints/
