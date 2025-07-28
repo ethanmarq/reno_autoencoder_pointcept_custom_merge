@@ -1,11 +1,19 @@
 _base_ = ["../_base_/default_runtime.py"]
 
 
+
+
 # misc custom setting
 batch_size = 1  # bs: total bs in all gpus
 mix_prob = 0.8
 empty_cache = False
 enable_amp = True
+
+# WANDB Config
+enable_wandb = True
+wandb_project = "reno-pptv3-uncompressed-jul25"  # Or your preferred project name
+wandb_key = "key" # Optional: if you have the key as an environment variable
+
 
 # model settings
 model = dict(
@@ -17,7 +25,7 @@ model = dict(
     backbone_out_channels=64,
     backbone=dict(
         type="PT-v3m1",
-        in_channels=4, # Change to 33
+        in_channels=33, # Orignial 4
         order=["z", "z-trans", "hilbert", "hilbert-trans"],
         stride=(2, 2, 2, 2),
         enc_depths=(2, 2, 2, 6, 2),

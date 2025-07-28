@@ -74,12 +74,13 @@ class MergedSegmentor(nn.Module):
         # Build the loss functions from the config
         self.criteria = build_criteria(criteria)
         self.recon_loss_weight = recon_loss_weight
+        self.CUDA = True
 
         # ======================= 2. LOAD CHECKPOINTS =======================
         print("Initializing MergedSegmentor...")
         if reno_ckpt and os.path.exists(reno_ckpt):
             print(f"Loading RENO checkpoint from: {reno_ckpt}")
-            self.decoder.load_state_dict(torch.load(reno_ckpt, map_location='cpu'))
+            self.decoder.load_state_dict(torch.load(reno_ckpt, map_location='cpu'), strict=False)
         else:
             print("WARNING: RENO checkpoint not found. Using random RENO weights.")
 
@@ -94,13 +95,25 @@ class MergedSegmentor(nn.Module):
 
             
     def forward(self, input_dict):
-            # ======================= STAGE 1: RENO PIPELINE (SIMULATED) =======================
-            # Create the initial sparse tensor for RENO from the original, uncompressed data.
-            reno_input = input_dict["reno_input"]
-            
+            if self.CUDA:
+                device = "cuda:0"
+            else:
+                device = "cpu"
+ 
+            reno_input = input_dict["reno_input"].to(device=device)
+            self.decoder.to(device)
+        
+            # Regenerate offset key
+            batch_indices = reno_input.coords[:, 0]
+            counts = torch.bincount(batch_indices.long())
+            offset = torch.cat([torch.tensor([0], device=device), counts.cumsum(dim=0)]).long()
+            input_dict["offset"] = offset
+
+        
             # 1a. Calculate Reconstruction Loss
             # This single line simulates reno/train.py to get the compression loss.
             loss_reconstruction = self.decoder(reno_input)
+
 
             # 1b. Generate Ground-Truth Occupancy Codes
             # This simulates the encoder creating the data that would normally be in a bitstream.
@@ -164,16 +177,17 @@ class MergedSegmentor(nn.Module):
 
             # Run PTv3 backbone and segmentation head
             point = self.segmentation_backbone(point)
+
             seg_logits = self.seg_head(point.feat)
 
             # ======================= STAGE 3: COMBINED LOSS =======================
             if self.training:
-                loss_seg = self.criteria(seg_logits, input_dict["segment"])
+                loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
                 total_loss = loss_seg + self.recon_loss_weight * loss_reconstruction
                 # Return individual losses for logging
                 return {"loss": total_loss, "loss_seg": loss_seg, "loss_recon": loss_reconstruction}
             else: # For validation
-                loss_seg = self.criteria(seg_logits, input_dict["segment"])
+                loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
                 return {"loss": loss_seg, "seg_logits": seg_logits}
 
 

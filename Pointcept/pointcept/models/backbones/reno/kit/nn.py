@@ -5,6 +5,9 @@ import torchsparse
 from torchsparse import nn as spnn
 from torchsparse import SparseTensor
 
+import torchsparse.nn.functional as F
+
+
 
 class ResNet(torch.nn.Module): 
     """Residual Network
@@ -33,24 +36,35 @@ class FOG(torch.nn.Module):
         for param in self.conv.parameters():
             param.requires_grad = False
 
-        self.pos_multiplier = torch.tensor([[1, 2, 4]], device='cuda')
+        self.pos_multiplier = torch.tensor([[1, 2, 4]])
+
 
     def pos(self, coords):
         """Assign codes (i.e., 1, 2, 4, ..., 64, 128) for each coords
         Input: coords: (N_d, 4)
         Return: pos: (N_d, 1)
         """ 
-        pos = (coords[:, 1:] % 2) * self.pos_multiplier # (N_d, 3)
+        # Manually Move self.pos_multiplier to correct device
+        self.pos_multiplier = self.pos_multiplier.to(coords.device)
+        
+        pos = (coords[:, 1:4] % 2) * self.pos_multiplier # (N_d, 3)
         pos = pos.sum(dim=-1, keepdim=True) # (N_d, 1)
         pos = (2 ** pos).float()
         return pos
 
     def forward(self, x):
         '''Dyadic downscaling to generate sparse occupancy code
-        Input: x SparseTensor: x.coords (N_d, 4); x.feats (N_d, 1)
+        Input: x SparseTensor: x[ (N_d, 4); x.feats (N_d, 1)
         Return: ds_x SparseTensor: ds_x.coords (N_{d-1}, 4); ds_x.feats (N_{d-1}, 1)
         ''' 
         x.feats = self.pos(x.coords) # (N{d-1}, 1)
+        
+        ### 
+        conv_config = F.conv_config.get_default_conv_config()
+        conv_config.kmap_mode = "hashmap"
+        F.conv_config.set_global_conv_config(conv_config)
+        ###
+
         ds_x = self.conv(x) # coordinate = ds_x.C and occupancy = ds_x.F
         return ds_x
 

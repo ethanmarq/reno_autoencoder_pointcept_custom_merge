@@ -54,14 +54,14 @@ class Network(nn.Module):
         self.fcg = FCG()
 
     def forward(self, x):
-        N = x.coord.shape[0]
+        N = x.coords.shape[0]
 
         # get sparse occupancy code list
         data_ls = []
         while True:
             x = self.fog(x)
-            data_ls.append((x.coord.clone(), x.feats.clone())) # must clone
-            if x.coord.shape[0] < 64:
+            data_ls.append((x.coords.clone(), x.feats.clone())) # must clone
+            if x.coords.shape[0] < 64:
                 break
         data_ls = data_ls[::-1]
         # data_ls: [(coord, occupancy), (coord, occupancy), ...]
@@ -75,7 +75,7 @@ class Network(nn.Module):
 
             # embedding prior scale feats
             x_F = self.prior_embedding(x_O.int()).view(-1, self.channels) # (N_d, C)
-            x = SparseTensor(coord=x_C, feats=x_F)
+            x = SparseTensor(coords=x_C, feats=x_F)
             x = self.prior_resnet(x) # (N_d, C) 
 
             # target embedding
@@ -83,7 +83,7 @@ class Network(nn.Module):
             x_up_C, x_up_F = op.sort_CF(x_up_C, x_up_F)
 
             x_up_F = self.target_embedding(x_up_F, x_up_C)
-            x_up = SparseTensor(coord=x_up_C, feats=x_up_F)
+            x_up = SparseTensor(coords=x_up_C, feats=x_up_F)
             x_up = self.target_resnet(x_up)
 
             # bit-wise two-stage coding
@@ -99,7 +99,7 @@ class Network(nn.Module):
             total_bits += torch.sum(torch.clamp(-1.0 * torch.log2(x_up_O_prob_s0 + 1e-10), 0, 50))
             total_bits += torch.sum(torch.clamp(-1.0 * torch.log2(x_up_O_prob_s1 + 1e-10), 0, 50))
 
-        N = torch.tensor(x.coord.shape[0], dtype=torch.float32, device=x.coord.device)
+        N = torch.tensor(x.coords.shape[0], dtype=torch.float32, device=x.coords.device)
         
         bpp = total_bits / N
 

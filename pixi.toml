@@ -60,6 +60,8 @@ ftfy = "*"
 regex = "*"
 tqdm = "*"
 wandb = ">=0.20.1, <0.21"
+typing_extensions = "==4.12.2"
+pathlib = "*"
 
 torchac = ">=0.9.3, <0.10"
 open3d = ">=0.18.0, <0.19"
