@@ -11,4 +11,4 @@ Pointcept/data/*
 Pointcept/scripts/pointcept.sif
 
 
-Pointcept/configs/goose/*
+Pointcept/configs/goose/semseg-merged-v3m1-0-base.py

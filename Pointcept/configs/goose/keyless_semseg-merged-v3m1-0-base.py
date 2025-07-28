@@ -12,7 +12,7 @@ enable_amp = True
 # WANDB Config
 enable_wandb = True
 wandb_project = "reno-pptv3-uncompressed-jul25"  # Or your preferred project name
-wandb_key = "key" # Optional: if you have the key as an environment variable
+wandb_key = "INPUT_KEY_HERE" # Optional: if you have the key as an environment variable
 
 
 # model settings
