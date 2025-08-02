@@ -372,6 +372,88 @@ class SemSegTester(TesterBase):
     @staticmethod
     def collate_fn(batch):
         return batch
+    
+    
+
+# Merged Reno PTv3 Teste
+from pointcept.datasets.reno_goose import reno_sparse_collate_fn 
+
+
+@TESTERS.register_module()
+class MergedTester(SemSegTester):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.intersection_list = []
+        self.union_list = []
+        self.target_list = []
+
+    def build_test_loader(self):
+        # Override this method to inject our custom collate_fn
+        test_dataset = build_dataset(self.cfg.data.test)
+        test_sampler = torch.utils.data.distributed.DistributedSampler(
+            test_dataset
+        ) if comm.get_world_size() > 1 else None
+        
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=self.cfg.batch_size_test_per_gpu,
+            shuffle=False,
+            num_workers=self.cfg.num_worker,
+            pin_memory=True,
+            sampler=test_sampler,
+            collate_fn=reno_sparse_collate_fn  # Use our custom collate function
+        )
+        return test_loader
+
+    def test(self):
+        self.logger.info(">>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>")
+        self.model.eval()
+        # Reset lists at the start of a new test run
+        self.intersection_list.clear()
+        self.union_list.clear()
+        self.target_list.clear()
+        
+        for i, data_dict in enumerate(self.test_loader):
+            with torch.no_grad():
+                result_dict = self.model(data_dict)
+            
+            pred = result_dict["seg_logits"].argmax(dim=1)
+            target = data_dict["segment"].to(pred.device)
+            
+            intersection, union, target = intersection_and_union_gpu(
+                pred, target, self.cfg.data.num_classes, self.cfg.data.ignore_index
+            )
+            
+            if comm.get_world_size() > 1:
+                dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
+            
+            self.intersection_list.append(intersection.cpu().numpy())
+            self.union_list.append(union.cpu().numpy())
+            self.target_list.append(target.cpu().numpy())
+            
+            if (i + 1) % self.cfg.log_period == 0:
+                self.logger.info(f"Test: [{i + 1}/{len(self.test_loader)}]")
+        
+        # Metric Computation
+        if comm.is_main_process():
+            intersection = np.sum(self.intersection_list, axis=0)
+            union = np.sum(self.union_list, axis=0)
+            target = np.sum(self.target_list, axis=0)
+            
+            iou_class = intersection / (union + 1e-10)
+            acc_class = intersection / (target + 1e-10)
+            m_iou = np.mean(iou_class)
+            m_acc = np.mean(acc_class)
+            
+            self.logger.info(
+                f"Validation Result: mIoU/mAcc/oAcc {m_iou:.4f}/{m_acc:.4f}/{np.sum(intersection) / (np.sum(target) + 1e-10):.4f}."
+            )
+            for i in range(self.cfg.data.num_classes):
+                self.logger.info(
+                    f"Class_{i} - {self.cfg.data.names[i]:14s}: "
+                    f"IoU {iou_class[i]:.4f}, "
+                    f"Acc {acc_class[i]:.4f}."
+                )
 
 
 @TESTERS.register_module()

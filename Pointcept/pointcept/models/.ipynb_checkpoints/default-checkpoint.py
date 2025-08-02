@@ -81,6 +81,11 @@ class MergedSegmentor(nn.Module):
         if reno_ckpt and os.path.exists(reno_ckpt):
             print(f"Loading RENO checkpoint from: {reno_ckpt}")
             self.decoder.load_state_dict(torch.load(reno_ckpt, map_location='cpu'), strict=False)
+            
+            # FREEZING RENO DECODER WEIGHTS
+            print("Freezing RENO decoder weights.")
+            for param in self.decoder.parameters():
+                param.requires_grad = False
         else:
             print("WARNING: RENO checkpoint not found. Using random RENO weights.")
 
@@ -180,15 +185,37 @@ class MergedSegmentor(nn.Module):
 
             seg_logits = self.seg_head(point.feat)
 
-            # ======================= STAGE 3: COMBINED LOSS =======================
+            # ======================= STAGE 3: LOSS =======================
             if self.training:
-                loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
+                # Labels per-voxel
+                # Most common label for all points in a voxel is chosen
+                num_voxels = seg_logits.shape[0]
+                voxel_segment = torch.zeros(num_voxels, dtype=torch.long, device=seg_logits.device)
+                # scatter_max is fast majority vote
+                voxel_segment, _ = torch_scatter.scatter_max(
+                    input_dict["segment"].to(seg_logits.device),
+                    input_dict["inverse_map"].to(seg_logits.device),
+                    out=voxel_segment
+                )
+                               
+                
+                loss_seg = self.criteria(seg_logits, voxel_segment)
                 total_loss = loss_seg + self.recon_loss_weight * loss_reconstruction
+                
                 # Return individual losses for logging
-                return {"loss": total_loss, "loss_seg": loss_seg, "loss_recon": loss_reconstruction}
+                #return {"loss": total_loss, "loss_seg": loss_seg, "loss_recon": loss_reconstruction}
+                
+                # Only return loss for ptv3d 
+                return {"loss": loss_seg}
             else: # For validation
-                loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
-                return {"loss": loss_seg, "seg_logits": seg_logits}
+                # Project the voxel predictions back to original point cloud space
+                inverse_map = input_dict["inverse_map"].to(seg_logits.device)
+                point_logits = seg_logits[inverse_map]
+                target_labels = input_dict["segment"].to(seg_logits.device)
+                
+                loss_seg = self.criteria(point_logits, target_labels)
+                #loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
+                return {"loss": loss_seg, "seg_logits": point_logits}
 
 
 @MODELS.register_module()

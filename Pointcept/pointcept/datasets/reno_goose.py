@@ -67,19 +67,28 @@ class RenoGooseDataset(DefaultDataset):
     def __getitem__(self, idx):
         data_dict = self.get_data(idx)
         coord = torch.tensor(data_dict["coord"][:, :3], dtype=torch.float)
-        quantized_coord = torch.round((coord / 0.001 + 131072) / 16).int()
+        
+        quantized_coord_all = torch.round((coord / 0.001 + 131072) / 16).int()
+        
+        unique_quantized_coord, inverse_map = torch.unique(
+            quantized_coord_all, dim=0, return_inverse=True
+        )
         
         # Create the SparseTensor here for a SINGLE sample.
         # The collate function will combine these into a batch.
         reno_input_tensor = SparseTensor(
-            coords=quantized_coord,
-            feats=torch.ones(quantized_coord.shape[0], 1)
+            coords=unique_quantized_coord,
+            feats=torch.ones(unique_quantized_coord.shape[0], 1)
         )
         
         segment_tensor = torch.tensor(data_dict["segment"], dtype=torch.long)
         
         # Return a dictionary with the key 'input', just like RENO's original dataset
-        return {"input": reno_input_tensor, "segment": segment_tensor}
+        return {
+            "input": reno_input_tensor, 
+            "segment": segment_tensor,
+            "inverse_map": inverse_map
+        }
     
     @staticmethod
     def get_learning_map(ignore_index):
@@ -115,9 +124,23 @@ class RenoGooseDataset(DefaultDataset):
 # This function correctly batches the SparseTensors created by the dataset
 def reno_sparse_collate_fn(batch):
     # `batch` is a list of dicts: [{'input': SparseTensor, 'segment': Tensor}, ...]
+    '''
     collated_dict = reno_collate(batch)
     collated_dict['reno_input'] = collated_dict.pop('input')
+    
     return collated_dict
+    '''
+    collated_input_dict = reno_collate([{'input': data['input']} for data in batch])
+    
+    # Concatenate segments and inverse_maps
+    collated_segments = torch.cat([data['segment'] for data in batch], dim=0)
+    collated_inverse_maps = torch.cat([data['inverse_map'] for data in batch], dim=0)
+    
+    return {
+        "reno_input": collated_input_dict['input'],
+        "segment": collated_segments,
+        "inverse_map": collated_inverse_maps
+    }
 
 '''
 # pointcept/datasets/reno_goose.py

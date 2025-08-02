@@ -167,7 +167,7 @@ class InformationWriter(HookBase):
 
 @HOOKS.register_module()
 class CheckpointSaver(HookBase):
-    def __init__(self, save_freq=None):
+    def __init__(self, save_freq=5000):
         self.save_freq = save_freq  # None or int, None indicate only save model last
 
     def after_epoch(self):
