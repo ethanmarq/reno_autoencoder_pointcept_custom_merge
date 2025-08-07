@@ -42,7 +42,6 @@ class DefaultSegmentor(nn.Module):
             return dict(seg_logits=seg_logits)
 
         
-      
 @MODELS.register_module()
 class MergedSegmentor(nn.Module):
     def __init__(
@@ -81,11 +80,6 @@ class MergedSegmentor(nn.Module):
         if reno_ckpt and os.path.exists(reno_ckpt):
             print(f"Loading RENO checkpoint from: {reno_ckpt}")
             self.decoder.load_state_dict(torch.load(reno_ckpt, map_location='cpu'), strict=False)
-            
-            # FREEZING RENO DECODER WEIGHTS
-            print("Freezing RENO decoder weights.")
-            for param in self.decoder.parameters():
-                param.requires_grad = False
         else:
             print("WARNING: RENO checkpoint not found. Using random RENO weights.")
 
@@ -185,38 +179,17 @@ class MergedSegmentor(nn.Module):
 
             seg_logits = self.seg_head(point.feat)
 
-            # ======================= STAGE 3: LOSS =======================
+            # ======================= STAGE 3: COMBINED LOSS =======================
             if self.training:
-                # Labels per-voxel
-                # Most common label for all points in a voxel is chosen
-                num_voxels = seg_logits.shape[0]
-                voxel_segment = torch.zeros(num_voxels, dtype=torch.long, device=seg_logits.device)
-                # scatter_max is fast majority vote
-                voxel_segment, _ = torch_scatter.scatter_max(
-                    input_dict["segment"].to(seg_logits.device),
-                    input_dict["inverse_map"].to(seg_logits.device),
-                    out=voxel_segment
-                )
-                               
-                
-                loss_seg = self.criteria(seg_logits, voxel_segment)
+                loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
                 total_loss = loss_seg + self.recon_loss_weight * loss_reconstruction
-                
                 # Return individual losses for logging
-                #return {"loss": total_loss, "loss_seg": loss_seg, "loss_recon": loss_reconstruction}
-                
-                # Only return loss for ptv3d 
-                return {"loss": loss_seg}
+                return {"loss": total_loss, "loss_seg": loss_seg, "loss_recon": loss_reconstruction}
             else: # For validation
-                # Project the voxel predictions back to original point cloud space
-                inverse_map = input_dict["inverse_map"].to(seg_logits.device)
-                point_logits = seg_logits[inverse_map]
-                target_labels = input_dict["segment"].to(seg_logits.device)
-                
-                loss_seg = self.criteria(point_logits, target_labels)
-                #loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
-                return {"loss": loss_seg, "seg_logits": point_logits}
+                loss_seg = self.criteria(seg_logits, input_dict["segment"].squeeze(0))
+                return {"loss": loss_seg, "seg_logits": seg_logits}
 
+      
 
 @MODELS.register_module()
 class DefaultSegmentorV2(nn.Module):
@@ -237,6 +210,55 @@ class DefaultSegmentorV2(nn.Module):
         self.criteria = build_criteria(criteria)
 
     def forward(self, input_dict):
+        point = Point(input_dict)
+        point = self.backbone(point)
+        # Backbone added after v1.5.0 return Point instead of feat and use DefaultSegmentorV2
+        # TODO: remove this part after make all backbone return Point only.
+        if isinstance(point, Point):
+            feat = point.feat
+        else:
+            feat = point
+        seg_logits = self.seg_head(feat)
+
+        if self.training:
+            try:
+                loss = self.criteria(seg_logits, input_dict["segment"])
+            except:
+                print(f"LOSS SHAPE ERROR: seg_logits_shape: {seg_logits.shape}, segment_shape: {input_dict['segment'].shape}")
+                loss = torch.tensor(float('nan'))
+            return dict(loss=loss)
+        # eval
+        elif "segment" in input_dict.keys():
+            loss = self.criteria(seg_logits, input_dict["segment"])
+            return dict(loss=loss, seg_logits=seg_logits)
+        # test
+        else:
+            return dict(seg_logits=seg_logits)
+        
+@MODELS.register_module()
+class DefaultSegmentorV3(nn.Module):
+    def __init__(
+        self,
+        num_classes,
+        backbone_out_channels,
+        backbone=None,
+        criteria=None,
+    ):
+        super().__init__()
+        self.seg_head = (
+            nn.Linear(backbone_out_channels, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
+        self.backbone = build_model(backbone)
+        self.criteria = build_criteria(criteria)
+
+    def forward(self, input_dict):
+        
+        if 'coord' in input_dict:
+            # Assuming 'coord' contains the (batch_index, x, y, z) data
+            input_dict['coord'] = input_dict['coord'][:, 1:]
+            
         point = Point(input_dict)
         point = self.backbone(point)
         # Backbone added after v1.5.0 return Point instead of feat and use DefaultSegmentorV2

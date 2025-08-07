@@ -14,6 +14,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+
 from pointcept.utils import comm
 
 __all__ = ["DEFAULT_TIMEOUT", "launch"]
@@ -57,6 +58,7 @@ def launch(
         timeout (timedelta): timeout of the distributed workers
         args (tuple): arguments passed to main_func
     """
+    
     world_size = num_machines * num_gpus_per_machine
     if world_size > 1:
         if dist_url == "auto":

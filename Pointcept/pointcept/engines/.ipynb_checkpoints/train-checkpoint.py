@@ -265,6 +265,11 @@ class Trainer(TrainerBase):
             if self.cfg.seed is not None
             else None
         )
+        
+        if self.cfg.model.type == "MergedSegmentor":
+            collate = reno_sparse_collate_fn
+        else:
+            collate = partial(point_collate_fn, mix_prob=self.cfg.mix_prob)
 
         train_loader = torch.utils.data.DataLoader(
             train_data,
@@ -273,7 +278,7 @@ class Trainer(TrainerBase):
             num_workers=self.cfg.num_worker_per_gpu,
             sampler=train_sampler,
             #collate_fn=partial(point_collate_fn, mix_prob=self.cfg.mix_prob),
-            collate_fn=reno_sparse_collate_fn,
+            collate_fn=collate,
             pin_memory=True,
             worker_init_fn=init_fn,
             drop_last=True,
@@ -289,6 +294,12 @@ class Trainer(TrainerBase):
                 val_sampler = torch.utils.data.distributed.DistributedSampler(val_data)
             else:
                 val_sampler = None
+                
+            if self.cfg.model.type == "MergedSegmentor":
+                collate = reno_sparse_collate_fn
+            else:
+                collate = collate_fn
+            
             val_loader = torch.utils.data.DataLoader(
                 val_data,
                 batch_size=self.cfg.batch_size_val_per_gpu,
@@ -297,7 +308,7 @@ class Trainer(TrainerBase):
                 pin_memory=True,
                 sampler=val_sampler,
                 #collate_fn=collate_fn,
-                collate_fn=reno_sparse_collate_fn,
+                collate_fn=collate,
             )
         return val_loader
 

@@ -5,7 +5,6 @@ Author: Xiaoyang Wu (xiaoyang.wu.cs@gmail.com)
 Please cite our work if the code is helpful to you.
 """
 
-from pointcept.datasets.reno_goose import reno_sparse_collate_fn
 
 from pointcept.engines.defaults import (
     default_argument_parser,
@@ -14,6 +13,7 @@ from pointcept.engines.defaults import (
 )
 from pointcept.engines.train import TRAINERS
 from pointcept.engines.launch import launch
+
 
 
 
@@ -38,4 +38,5 @@ def main():
 
 
 if __name__ == "__main__":
+    
     main()

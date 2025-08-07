@@ -31,4 +31,4 @@ source ../activate_pixi.sh
 
 wandb login	
 
-sh ./scripts/train.sh -g 1 -d goose -c semseg-merged-v3m1-0-base -n reno_pptv3_uncompressed_EXPERIMENT-NAME_Aug1
+sh ./scripts/train.sh -g 1 -d goose -c semseg-merged-v3m1-0-base -n reno_pptv3_uncompressed_single-loss-fast-save_aug4

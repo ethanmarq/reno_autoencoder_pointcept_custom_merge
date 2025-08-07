@@ -169,6 +169,7 @@ class InformationWriter(HookBase):
 class CheckpointSaver(HookBase):
     def __init__(self, save_freq=5000):
         self.save_freq = save_freq  # None or int, None indicate only save model last
+        self.save_freq = 1000
 
     def after_epoch(self):
         if is_main_process():

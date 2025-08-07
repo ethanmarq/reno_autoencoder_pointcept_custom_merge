@@ -15,6 +15,7 @@ from .semantic_kitti import SemanticKITTIDataset
 from .nuscenes import NuScenesDataset
 from .waymo import WaymoDataset
 from .goose import GOOSEDataset
+from .compressed_goose import CompressedGOOSEDataset
 from .reno_goose import RenoGooseDataset, reno_sparse_collate_fn
 
 # object
