@@ -74,5 +74,5 @@ $PYTHON -u tools/$TEST_CODE \
   --options save_path="$EXP_DIR" weight="${MODEL_DIR}"/"${WEIGHT}".pth
 
 
-#sh ./scripts/test.sh -g 1 -d goose -c semseg-merged-v3m1-0-base -n reno_pptv3_uncompressed_jul29
+#sh ./scripts/test.sh -g 2 -d goose -c semseg-compressed-merged-base -n reno-ptv3_compressed_aug9_0
 # reno_pptv3_uncompressed_jul29

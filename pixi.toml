@@ -25,6 +25,7 @@ cmd = "pip install git+https://github.com/openai/CLIP.git"
 
 [dependencies]
 python = "3.9.*"
+ipykernel = "*"
 h5py = "*"
 pyyaml = "*"
 sharedarray = "*"

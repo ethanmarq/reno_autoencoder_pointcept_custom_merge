@@ -255,9 +255,9 @@ class DefaultSegmentorV3(nn.Module):
 
     def forward(self, input_dict):
         
-        if 'coord' in input_dict:
+        #if 'coord' in input_dict:
             # Assuming 'coord' contains the (batch_index, x, y, z) data
-            input_dict['coord'] = input_dict['coord'][:, 1:]
+            #input_dict['coord'] = input_dict['coord'][:, 1:]
             
         point = Point(input_dict)
         point = self.backbone(point)

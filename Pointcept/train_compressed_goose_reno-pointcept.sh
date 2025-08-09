@@ -4,7 +4,7 @@
 #SBATCH --nodes 1
 #SBATCH --tasks-per-node 1
 #SBATCH --cpus-per-task 16
-#SBATCH --gpus-per-node a100:1
+#SBATCH --gpus-per-node a100:2
 #SBATCH --mem 64gb
 #SBATCH --time 30:00:00
   
@@ -30,5 +30,5 @@ source ../activate_pixi.sh
 
 wandb login
 
-sh ./scripts/train.sh -g 2 -d goose -c semseg-compressed-merged-base -n reno-ptv3_compressed_aug7_0
+sh ./scripts/train.sh -g 2 -d goose -c semseg-compressed-merged-base -n reno-ptv3_compressed_aug9_num-work8_2
 # Change batch_size in config to match number of GPUs

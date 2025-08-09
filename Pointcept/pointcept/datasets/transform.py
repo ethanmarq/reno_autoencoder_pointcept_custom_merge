@@ -145,6 +145,8 @@ class CenterShift(object):
 
     def __call__(self, data_dict):
         if "coord" in data_dict.keys():
+            data_dict["coord"] = data_dict["coord"].astype(np.float32)
+            
             x_min, y_min, z_min = data_dict["coord"].min(axis=0)
             x_max, y_max, _ = data_dict["coord"].max(axis=0)
             if self.apply_z:

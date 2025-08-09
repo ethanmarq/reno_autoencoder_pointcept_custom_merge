@@ -131,7 +131,103 @@ class DefaultDataset(Dataset):
         data_dict = self.get_data(idx)
         data_dict = self.transform(data_dict)
         return data_dict
+    
+    
+###
 
+    def prepare_test_data(self, idx):
+        # The transform pipeline might return a list of dictionaries if mode is "test"
+        data_dict = self.get_data(idx)
+        data_dict = self.transform(data_dict)
+
+        if isinstance(data_dict, list):
+            # Handle the list of data parts from GridSample in test mode
+            result_list = []
+            for data_part in data_dict:
+                result_dict = dict(segment=data_part.pop("segment"), name=data_part.pop("name"))
+                result_dict.update(data_part)
+
+                if "origin_segment" in result_dict:
+                    assert "inverse" in result_dict
+                    # The pop is already handled above, no need to pop again
+                    # These keys should be in result_dict from the update
+                    pass 
+
+                # Apply aug_transform
+                data_dict_list = []
+                for aug in self.aug_transform:
+                    data_dict_list.append(aug(deepcopy(result_dict)))
+
+                # Continue the rest of the pipeline for each data part
+                fragment_list = []
+                for data in data_dict_list:
+                    if self.test_voxelize is not None:
+                        data_part_list = self.test_voxelize(data)
+                    else:
+                        data["index"] = np.arange(data["coord"].shape[0])
+                        data_part_list = [data]
+
+                    for data_part in data_part_list:
+                        if self.test_crop is not None:
+                            data_part = self.test_crop(data_part)
+                        else:
+                            data_part = [data_part]
+                        fragment_list += data_part
+
+                for i in range(len(fragment_list)):
+                    fragment_list[i] = self.post_transform(fragment_list[i])
+
+                # We must return the dictionary to handle the list of outputs correctly
+                result_dict["fragment_list"] = fragment_list
+                result_list.append(result_dict)
+
+            return result_list
+
+        else:
+            # Original logic for a single dictionary
+            result_dict = dict(segment=data_dict.pop("segment"), name=data_dict.pop("name"))
+            result_dict.update(data_dict)
+
+            if "origin_segment" in result_dict:
+                assert "inverse" in result_dict
+
+            data_dict_list = []
+            for aug in self.aug_transform:
+                data_dict_list.append(aug(deepcopy(result_dict)))
+
+            fragment_list = []
+            for data in data_dict_list:
+                if self.test_voxelize is not None:
+                    data_part_list = self.test_voxelize(data)
+                else:
+                    data["index"] = np.arange(data["coord"].shape[0])
+                    data_part_list = [data]
+
+                for data_part in data_part_list:
+                    if self.test_crop is not None:
+                        data_part = self.test_crop(data_part)
+                    else:
+                        data_part = [data_part]
+                    fragment_list += data_part
+
+            for i in range(len(fragment_list)):
+                fragment_list[i] = self.post_transform(fragment_list[i])
+            result_dict["fragment_list"] = fragment_list
+
+            return result_dict
+
+###
+
+    def __getitem__(self, idx):
+        if self.test_mode:
+            return self.prepare_test_data(idx)
+        else:
+            return self.prepare_train_data(idx)
+
+    def __len__(self):
+        return len(self.data_list) * self.loop
+
+    """
     def prepare_test_data(self, idx):
         # load data
         data_dict = self.get_data(idx)
@@ -164,16 +260,7 @@ class DefaultDataset(Dataset):
             fragment_list[i] = self.post_transform(fragment_list[i])
         result_dict["fragment_list"] = fragment_list
         return result_dict
-
-    def __getitem__(self, idx):
-        if self.test_mode:
-            return self.prepare_test_data(idx)
-        else:
-            return self.prepare_train_data(idx)
-
-    def __len__(self):
-        return len(self.data_list) * self.loop
-
+    """
 
 @DATASETS.register_module()
 class ConcatDataset(Dataset):
